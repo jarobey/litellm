@@ -3908,6 +3908,12 @@ async def completion(  # noqa: PLR0915
     response_class=ORJSONResponse,
     tags=["embeddings"],
 )  # azure compatible endpoint
+@router.post(
+    "/embedding_model/embed_batch",  # Your new endpoint
+    dependencies=[Depends(user_api_key_auth)],
+    response_class=ORJSONResponse,
+    tags=["embeddings"],
+)  # For langchain calls when using OpenAI's Embedding API
 async def embeddings(  # noqa: PLR0915
     request: Request,
     fastapi_response: Response,
@@ -3938,6 +3944,13 @@ async def embeddings(  # noqa: PLR0915
         body = await request.body()
         data = orjson.loads(body)
 
+        if "model" not in data:
+            data["model"] = general_settings.get("default_embedding_model")
+
+        # Convert parameter names if needed
+        if "texts" in data:  # Your parameter name
+            data["input"] = data.pop("texts")  # Convert to OpenAI format
+            
         verbose_proxy_logger.debug(
             "Request received by LiteLLM:\n%s",
             json.dumps(data, indent=4),
@@ -3952,16 +3965,6 @@ async def embeddings(  # noqa: PLR0915
             version=version,
             proxy_config=proxy_config,
         )
-
-        data["model"] = (
-            general_settings.get("embedding_model", None)  # server default
-            or user_model  # model name passed via cli args
-            or model  # for azure deployments
-            or data["model"]  # default passed in http request
-        )
-        if user_model:
-            data["model"] = user_model
-
         ### MODEL ALIAS MAPPING ###
         # check if model name in model alias map
         # get the actual model name
